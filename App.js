@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, Switch, Alert, FlatList } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, Switch, Alert, FlatList, Dimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { loadAppState, persistTheme, persistBudget, persistExpenses, persistAuth } from './storage';
 
 // --- Definições de Cores e Temas ---
 const CATEGORY_COLORS = {
@@ -278,12 +279,20 @@ const LoginScreen = ({ onNavigate, theme, onLogin }) => {
 };
 
 // --- Componente: Gráfico de Pizza Dinâmico (Simulação) ---
-const DynamicPieChart = ({ categories, totalSpent, theme }) => {
+// --- Gráfico com drill-down recursivo (simulado) ---
+const DynamicPieChart = ({ categories, totalSpent, theme, onSlicePress, title }) => {
+    const windowWidth = Dimensions.get('window').width;
+    const size = Math.min(200, Math.max(140, Math.floor(windowWidth * 0.45)));
+    const inner = Math.floor(size * 0.66);
+
     if (totalSpent === 0) {
         return (
             <View style={styles.pieChartContainer}>
-                <View style={[styles.pieChart, { backgroundColor: CATEGORY_COLORS.Vazio }]}>
-                    <View style={[styles.pieInnerCircle, { backgroundColor: theme.screenBackground }]}>
+                <Text style={[styles.sectionTitle, { color: theme.secondaryText, textAlign: 'center' }]}>
+                    {title || 'Total Gasto'}
+                </Text>
+                <View style={[styles.pieChart, { width: size, height: size, borderRadius: size / 2, backgroundColor: CATEGORY_COLORS.Vazio }]}> 
+                    <View style={[styles.pieInnerCircle, { width: inner, height: inner, borderRadius: inner / 2, backgroundColor: theme.screenBackground }]}> 
                         <Text style={[styles.chartTotalText, { color: theme.secondaryText }]}>R$ 0,00</Text>
                     </View>
                 </View>
@@ -291,20 +300,25 @@ const DynamicPieChart = ({ categories, totalSpent, theme }) => {
         );
     }
 
-    // SIMULAÇÃO DO GRÁFICO: Usa a cor da maior fatia (primeira categoria) para o círculo principal.
-    // Isso é feito para garantir que o código seja executável em React Native sem bibliotecas de SVG/Gráficos.
     const largestSlice = categories[0];
     const displayTotal = totalSpent.toFixed(2).replace('.', ',');
 
     return (
         <View style={styles.pieChartContainer}>
-            <View style={[styles.pieChart, { backgroundColor: largestSlice.color }]}>
-                {/* O círculo interno simula o "furo" do donut ou a área central */}
-                <View style={[styles.pieInnerCircle, { backgroundColor: theme.screenBackground }]}>
-                    <Text style={[styles.chartTotalText, { color: theme.text }]}>R$ {displayTotal}</Text>
-                    <Text style={[styles.chartSubText, { color: theme.secondaryText }]}>Total Gasto</Text>
+            {title && (
+                <Text style={[styles.sectionTitle, { color: theme.secondaryText, textAlign: 'center' }]}>
+                    {title}
+                </Text>
+            )}
+            <TouchableOpacity activeOpacity={0.9} onPress={() => onSlicePress?.(largestSlice)}>
+                <View style={[styles.pieChart, { width: size, height: size, borderRadius: size / 2, backgroundColor: largestSlice.color }]}> 
+                    <View style={[styles.pieInnerCircle, { width: inner, height: inner, borderRadius: inner / 2, backgroundColor: theme.screenBackground }]}> 
+                        <Text style={[styles.chartTotalText, { color: theme.text }]}>R$ {displayTotal}</Text>
+                        <Text style={[styles.chartSubText, { color: theme.secondaryText }]}>{largestSlice?.name}</Text>
+                    </View>
                 </View>
-            </View>
+            </TouchableOpacity>
+            <Text style={[styles.sectionTitle, { color: theme.secondaryText, textAlign: 'center', marginTop: 8 }]}>Toque para detalhar</Text>
         </View>
     );
 };
@@ -314,13 +328,40 @@ const DynamicPieChart = ({ categories, totalSpent, theme }) => {
 const DashboardScreen = ({ onNavigate, theme, summary, budget }) => {
   const { totalSpent, categories } = summary;
 
+  const [drillStack, setDrillStack] = useState([]); // Cada nível: { title, data }
+  const currentLevel = drillStack[drillStack.length - 1];
+  const displayedCategories = currentLevel?.data || categories;
+  const displayedTitle = currentLevel?.title || 'Total Gasto';
+  const displayedTotal = currentLevel
+    ? currentLevel.data.reduce((sum, c) => sum + (c.value || 0), 0)
+    : totalSpent;
+
   const formattedTotal = totalSpent.toFixed(2).replace('.', ',');
   const budgetRemaining = budget - totalSpent;
   const isOverBudget = budgetRemaining < 0;
 
+  const handleSlicePress = (slice) => {
+    // Simula drill-down: quando tocar na maior categoria, foca nela isoladamente
+    if (!slice) return;
+    // Se já focado, não empilha novamente
+    if (currentLevel && currentLevel.title === slice.name) return;
+    setDrillStack((prev) => [
+      ...prev,
+      {
+        title: slice.name,
+        data: [slice], // neste protótipo, foca somente na fatia tocada
+      },
+    ]);
+  };
+
+  const handleDrillBack = () => {
+    if (drillStack.length === 0) return;
+    setDrillStack((prev) => prev.slice(0, -1));
+  };
+
   return (
     <View style={[styles.screenContainer, { backgroundColor: theme.screenBackground }]}>
-      <Header title="Dashboard" onBack={() => onNavigate('login')} theme={theme} />
+      <Header title={currentLevel ? `Dashboard · ${displayedTitle}` : 'Dashboard'} onBack={currentLevel ? handleDrillBack : () => onNavigate('login')} theme={theme} />
       <ScrollView style={styles.contentScrollView}>
         <ThemedCard theme={theme} style={styles.cardSection}>
           <Text style={[styles.sectionTitle, { color: theme.secondaryText }]}>Orçamento Semanal (R$ {budget.toFixed(2).replace('.', ',')})</Text>
@@ -333,14 +374,20 @@ const DashboardScreen = ({ onNavigate, theme, summary, budget }) => {
           
           <Text style={[styles.sectionTitle, { color: theme.secondaryText, marginTop: 30 }]}>Gasto Total</Text>
           
-          {/* Gráfico de Pizza Dinâmico (Visualização Central) */}
-          <DynamicPieChart categories={categories} totalSpent={totalSpent} theme={theme} />
+          {/* Gráfico com drill-down (toque para detalhar) */}
+          <DynamicPieChart 
+            categories={displayedCategories} 
+            totalSpent={displayedTotal} 
+            theme={theme}
+            title={displayedTitle}
+            onSlicePress={handleSlicePress}
+          />
 
           {totalSpent > 0 ? (
             <View style={styles.legendContainer}>
                 <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 10 }]}>Distribuição por Categoria:</Text>
                 {/* Legenda Detalhada (Mostra todas as "fatias") */}
-                {categories.filter(c => c.name !== 'Vazio').map((item, index) => (
+                {displayedCategories.filter(c => c.name !== 'Vazio').map((item, index) => (
                   <View key={item.name} style={styles.legendItem}>
                     <View style={[styles.legendDot, { backgroundColor: item.color }]} />
                     <Text style={[styles.legendText, { color: theme.text }]}>{item.name}</Text>
@@ -599,6 +646,7 @@ const SettingsScreen = ({ onNavigate, theme, isDarkMode, toggleTheme, budget, se
             return;
         }
         setBudget(valueNum); // Chama a função que salva no estado local
+        persistBudget(valueNum);
         Alert.alert('Sucesso', `Orçamento semanal salvo como R$${valueNum.toFixed(2).replace('.', ',')}.`);
     };
 
@@ -725,25 +773,54 @@ export default function App() {
 
   // --- Funções CRUD Locais ---
   const addExpense = (newExpense) => {
-    setExpenses(prev => [...prev, { ...newExpense, id: Date.now(), value: parseFloat(newExpense.value) }]);
+    setExpenses(prev => {
+      const next = [...prev, { ...newExpense, id: Date.now(), value: parseFloat(newExpense.value) }];
+      persistExpenses(next);
+      return next;
+    });
   };
   
   const deleteExpense = (id) => {
-      setExpenses(prev => prev.filter(expense => expense.id !== id));
+      setExpenses(prev => {
+        const next = prev.filter(expense => expense.id !== id);
+        persistExpenses(next);
+        return next;
+      });
       Alert.alert("Sucesso", "Gasto removido com sucesso.");
   };
 
-  const toggleTheme = () => setIsDarkMode(prev => !prev);
+  const toggleTheme = () => setIsDarkMode(prev => {
+    const next = !prev;
+    persistTheme(next);
+    return next;
+  });
   const handleLogin = (email, password) => {
     setIsAuthenticated(true);
+    persistAuth(true);
     setCurrentScreen('dashboard');
   };
   const handleLogout = () => {
     setIsAuthenticated(false);
+    persistAuth(false);
     setCurrentScreen('welcome');
     Alert.alert('Sessão encerrada', 'Você saiu da sua conta.');
   };
   
+
+  // --- Carregamento inicial (preparado para banco de dados/local storage) ---
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const saved = await loadAppState();
+        if (saved.isDarkMode !== null) setIsDarkMode(saved.isDarkMode);
+        if (typeof saved.budget === 'number' && !Number.isNaN(saved.budget)) setBudget(saved.budget);
+        if (Array.isArray(saved.expenses)) setExpenses(saved.expenses);
+        if (typeof saved.isAuthenticated === 'boolean') setIsAuthenticated(saved.isAuthenticated);
+      } catch (e) {
+        // Silencia falhas de storage; app segue com defaults
+      }
+    })();
+  }, []);
 
   // --- Renderização ---
   const expenseSummary = calculateExpenseSummary(expenses);
