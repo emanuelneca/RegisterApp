@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, Switch, Alert, FlatList } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 
 // --- Definições de Cores e Temas ---
 const CATEGORY_COLORS = {
@@ -172,15 +174,17 @@ const BudgetProgressBar = ({ totalSpent, budget, theme }) => {
 
 // --- 1. Tela de Boas-vindas ---
 const WelcomeScreen = ({ onNavigate, theme }) => (
-  <View style={[styles.screenContainer, { backgroundColor: theme.screenBackground }]}>
-    <ThemedCard theme={theme}>
+  <View style={[styles.screenContainer, styles.centeredContainer, { backgroundColor: theme.screenBackground }]}> 
+    <ThemedCard theme={theme} style={{ width: '92%', maxWidth: 420, alignItems: 'center' }}>
+      <Ionicons name="wallet-outline" size={56} color={theme.primary} style={styles.welcomeIcon} />
       <Text style={[styles.welcomeTitle, { color: theme.primary }]}>Registro de Gastos da Semana</Text>
-      <Text style={[styles.welcomeText, { color: theme.secondaryText }]}>
+      <Text style={[styles.welcomeText, { color: theme.secondaryText, textAlign: 'center', marginTop: 6 }]}> 
         Controle seus gastos e organize sua semana!
       </Text>
       <TouchableOpacity
-        style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-        onPress={() => onNavigate('dashboard')} 
+        accessibilityRole="button"
+        style={[styles.primaryButton, { backgroundColor: theme.primary, alignSelf: 'stretch' }]}
+        onPress={() => onNavigate('login')}
       >
         <Text style={styles.buttonText}>Começar</Text>
       </TouchableOpacity>
@@ -188,43 +192,90 @@ const WelcomeScreen = ({ onNavigate, theme }) => (
   </View>
 );
 
-// --- 2. Tela de Login (Mantida para fluxo do protótipo) ---
-const LoginScreen = ({ onNavigate, theme }) => (
-  <View style={[styles.screenContainer, { backgroundColor: theme.screenBackground }]}>
-    <Header title="Login" onBack={() => onNavigate('welcome')} theme={theme} />
-    <ThemedCard theme={theme}>
-      <Text style={[styles.label, { color: theme.secondaryText }]}>Email</Text>
-      <TextInput 
-        style={[styles.input, { borderColor: theme.inputBorder, color: theme.text, backgroundColor: theme.inputBackground }]} 
-        placeholder="seu.email@exemplo.com" 
-        keyboardType="email-address" 
-        placeholderTextColor={theme.secondaryText}
-      />
-      
-      <Text style={[styles.label, { color: theme.secondaryText }]}>Senha</Text>
-      <TextInput 
-        style={[styles.input, { borderColor: theme.inputBorder, color: theme.text, backgroundColor: theme.inputBackground }]} 
-        placeholder="********" 
-        secureTextEntry 
-        placeholderTextColor={theme.secondaryText}
-      />
+// --- 2. Tela de Login (agora com validação e UX aprimorada) ---
+const LoginScreen = ({ onNavigate, theme, onLogin }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-      <TouchableOpacity
-        style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-        onPress={() => onNavigate('dashboard')}
-      >
-        <Text style={styles.buttonText}>Entrar</Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity
-        style={styles.secondaryButton}
-        onPress={() => Alert.alert('Simulação', 'Navegando para tela de Cadastro...')}
-      >
-        <Text style={[styles.secondaryButtonText, { color: theme.secondaryButtonText }]}>Cadastrar-se</Text>
-      </TouchableOpacity>
-    </ThemedCard>
-  </View>
-);
+  const isValidEmail = /.+@.+\..+/.test(email.trim());
+  const isValidPassword = password.length >= 6;
+  const isValid = isValidEmail && isValidPassword && !submitting;
+
+  const handleSubmit = () => {
+    if (!isValidEmail || !isValidPassword) {
+      Alert.alert('Atenção', 'Informe um email válido e senha com 6+ caracteres.');
+      return;
+    }
+    setSubmitting(true);
+    setTimeout(() => {
+      onLogin?.(email.trim(), password);
+      setSubmitting(false);
+    }, 500);
+  };
+
+  return (
+    <View style={[styles.screenContainer, { backgroundColor: theme.screenBackground }]}> 
+      <Header title="Login" onBack={() => onNavigate('welcome')} theme={theme} />
+      <ThemedCard theme={theme}>
+        <Text style={[styles.label, { color: theme.secondaryText }]}>Email</Text>
+        <TextInput 
+          style={[styles.input, { borderColor: theme.inputBorder, color: theme.text, backgroundColor: theme.inputBackground }]} 
+          placeholder="seu.email@exemplo.com" 
+          keyboardType="email-address" 
+          placeholderTextColor={theme.secondaryText}
+          autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+        />
+        {!isValidEmail && email.length > 0 && (
+          <Text style={[styles.errorText, { color: theme.delete }]}>Email inválido</Text>
+        )}
+        
+        <Text style={[styles.label, { color: theme.secondaryText }]}>Senha</Text>
+        <View style={styles.passwordRow}>
+          <TextInput 
+            style={[styles.input, { flex: 1, borderColor: theme.inputBorder, color: theme.text, backgroundColor: theme.inputBackground }]} 
+            placeholder="********" 
+            secureTextEntry={!showPassword}
+            placeholderTextColor={theme.secondaryText}
+            value={password}
+            onChangeText={setPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(p => !p)} style={styles.togglePassword}>
+            <Text style={{ color: theme.secondaryText }}>{showPassword ? 'Ocultar' : 'Mostrar'}</Text>
+          </TouchableOpacity>
+        </View>
+        {!isValidPassword && password.length > 0 && (
+          <Text style={[styles.errorText, { color: theme.delete }]}>Mínimo de 6 caracteres</Text>
+        )}
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          style={[styles.primaryButton, { backgroundColor: theme.primary, opacity: isValid ? 1 : 0.6 }]}
+          onPress={handleSubmit}
+          disabled={!isValid}
+        >
+          <Text style={styles.buttonText}>{submitting ? 'Entrando...' : 'Entrar'}</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => Alert.alert('Simulação', 'Navegando para tela de Cadastro...')}
+        >
+          <Text style={[styles.secondaryButtonText, { color: theme.secondaryButtonText }]}>Cadastrar-se</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.secondaryButton, { marginTop: 8 }]}
+          onPress={() => Alert.alert('Ajuda', 'Link de recuperação enviado para seu email (simulação).')}
+        >
+          <Text style={[styles.secondaryButtonText, { color: theme.secondaryButtonText }]}>Esqueci minha senha</Text>
+        </TouchableOpacity>
+      </ThemedCard>
+    </View>
+  );
+};
 
 // --- Componente: Gráfico de Pizza Dinâmico (Simulação) ---
 const DynamicPieChart = ({ categories, totalSpent, theme }) => {
@@ -531,7 +582,7 @@ const StatsScreen = ({ onNavigate, theme, summary, budget }) => {
 };
 
 // --- 6. Tela de Configurações ---
-const SettingsScreen = ({ onNavigate, theme, isDarkMode, toggleTheme, budget, setBudget }) => {
+const SettingsScreen = ({ onNavigate, theme, isDarkMode, toggleTheme, budget, setBudget, onLogout }) => {
     const [budgetInput, setBudgetInput] = useState(budget.toFixed(2).replace('.', ','));
 
     // Atualiza o input se o orçamento for alterado
@@ -615,6 +666,13 @@ const SettingsScreen = ({ onNavigate, theme, isDarkMode, toggleTheme, budget, se
             onPress={() => Alert.alert('Simulação', 'Abrindo formulário de Feedback.')} 
         />
 
+        <TouchableOpacity
+          style={[styles.primaryButton, { backgroundColor: theme.delete, marginTop: 10 }]}
+          onPress={onLogout}
+        >
+          <Text style={styles.buttonText}>Sair da conta</Text>
+        </TouchableOpacity>
+
       </ThemedCard>
       </ScrollView>
     </View>
@@ -623,6 +681,11 @@ const SettingsScreen = ({ onNavigate, theme, isDarkMode, toggleTheme, budget, se
 
 // --- 7. Tela de Listagem de Gastos e Exclusão ---
 const ExpenseListScreen = ({ onNavigate, theme, expenses, onDelete }) => {
+    const [refreshing, setRefreshing] = useState(false);
+    const onRefresh = () => {
+        setRefreshing(true);
+        setTimeout(() => setRefreshing(false), 600);
+    };
     return (
         <View style={[styles.screenContainer, { backgroundColor: theme.screenBackground }]}>
             <Header title="Histórico de Gastos" onBack={() => onNavigate('dashboard')} theme={theme} />
@@ -636,6 +699,8 @@ const ExpenseListScreen = ({ onNavigate, theme, expenses, onDelete }) => {
                         <ExpenseListItem expense={item} theme={theme} onDelete={onDelete} />
                     </ThemedCard>
                 )}
+                refreshing={refreshing}
+                onRefresh={onRefresh}
                 ListEmptyComponent={() => (
                     <Text style={[styles.sectionTitle, {color: theme.secondaryText, marginTop: 40, textAlign: 'center'}]}>
                         Nenhum gasto registrado ainda.
@@ -650,6 +715,7 @@ const ExpenseListScreen = ({ onNavigate, theme, expenses, onDelete }) => {
 // --- Componente Principal da Aplicação (Com Estado Local) ---
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('welcome');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   
   // Dados reais: inicia com array vazio, os gastos são adicionados pelo usuário.
@@ -668,13 +734,29 @@ export default function App() {
   };
 
   const toggleTheme = () => setIsDarkMode(prev => !prev);
+  const handleLogin = (email, password) => {
+    setIsAuthenticated(true);
+    setCurrentScreen('dashboard');
+  };
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setCurrentScreen('welcome');
+    Alert.alert('Sessão encerrada', 'Você saiu da sua conta.');
+  };
   
 
   // --- Renderização ---
   const expenseSummary = calculateExpenseSummary(expenses);
   const theme = isDarkMode ? darkTheme : lightTheme;
 
-  const navigate = (screenName) => setCurrentScreen(screenName);
+  const AUTH_SCREENS = new Set(['dashboard', 'history', 'expenseList', 'stats', 'settings']);
+  const navigate = (screenName) => {
+    if (AUTH_SCREENS.has(screenName) && !isAuthenticated) {
+      setCurrentScreen('login');
+      return;
+    }
+    setCurrentScreen(screenName);
+  };
   
   const renderScreen = () => {
     const screenProps = { 
@@ -686,7 +768,7 @@ export default function App() {
       case 'welcome':
         return <WelcomeScreen {...screenProps} />;
       case 'login':
-        return <LoginScreen {...screenProps} />;
+        return <LoginScreen {...screenProps} onLogin={handleLogin} />;
       case 'dashboard':
         return <DashboardScreen {...screenProps} summary={expenseSummary} budget={budget} />;
       case 'history': 
@@ -702,6 +784,7 @@ export default function App() {
                     toggleTheme={toggleTheme} 
                     budget={budget} 
                     setBudget={setBudget} // Usa a função local
+                    onLogout={handleLogout}
                 />;
       default:
         return <WelcomeScreen {...screenProps} />;
@@ -711,6 +794,7 @@ export default function App() {
 
   return (
     <View style={[styles.appContainer, { backgroundColor: theme.background }]}>
+      <StatusBar style={isDarkMode ? 'light' : 'dark'} />
       {renderScreen()}
     </View>
   );
@@ -733,6 +817,11 @@ const styles = StyleSheet.create({
   },
   screenContainer: {
     flex: 1,
+  },
+  centeredContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   contentScrollView: {
     flex: 1,
@@ -800,6 +889,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 25,
   },
+  secondaryButton: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  errorText: {
+    fontSize: 12,
+    marginTop: 4,
+  },
   buttonText: {
     color: 'white',
     fontSize: 16,
@@ -841,6 +942,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: 20,
+  },
+  welcomeIcon: {
+    marginBottom: 10,
   },
   pieChart: {
     width: 150,
@@ -974,6 +1078,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 15,
     borderBottomWidth: 1,
+  },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  togglePassword: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
   settingLabel: {
     fontSize: 16,
