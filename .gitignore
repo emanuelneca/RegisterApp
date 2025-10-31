@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Ignorar chaves secretas do Firebase
+/firebaseConfig.js
