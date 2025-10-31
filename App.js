@@ -177,7 +177,7 @@ const WelcomeScreen = ({ onNavigate, theme }) => (
   <View style={[styles.screenContainer, styles.centeredContainer, { backgroundColor: theme.screenBackground }]}> 
     <ThemedCard theme={theme} style={{ width: '92%', maxWidth: 420, alignItems: 'center' }}>
       <Ionicons name="wallet-outline" size={56} color={theme.primary} style={styles.welcomeIcon} />
-      <Text style={[styles.welcomeTitle, { color: theme.primary }]}>Registro de Gastos da Semana</Text>
+      <Text style={[styles.welcomeTitle, { color: theme.primary }]}>Wallet Watch</Text>
       <Text style={[styles.welcomeText, { color: theme.secondaryText, textAlign: 'center', marginTop: 6 }]}> 
         Controle seus gastos e organize sua semana!
       </Text>
